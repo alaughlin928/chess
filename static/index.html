@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chess Analysis</title>
+  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
+  <style>
+    :root {
+      --bg: #161512;
+      --surface: #262421;
+      --surface2: #302e2b;
+      --text: #bababa;
+      --text-bright: #e8e8e8;
+      --accent: #81b64c;
+      --accent-dim: #5a8a32;
+      --muted: #6b6b6b;
+      --eval-white: #f0f0f0;
+      --eval-black: #1a1a1a;
+      --line1: #81b64c;
+      --line2: #f7c948;
+      --line3: #6bb6ff;
+      --danger: #e85d5d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1.25rem;
+      background: var(--surface);
+      border-bottom: 1px solid #3d3a36;
+    }
+    .topbar h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin: 0;
+    }
+    .mode-toggle {
+      display: flex;
+      background: var(--bg);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .mode-toggle button {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      padding: 0.45rem 1rem;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .mode-toggle button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .status-bar {
+      flex: 1;
+      text-align: center;
+      font-size: 0.9rem;
+      color: var(--text-bright);
+    }
+    .status-bar.check { color: var(--danger); }
+    .main {
+      display: flex;
+      gap: 1.5rem;
+      padding: 1.25rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      flex-wrap: wrap;
+    }
+    .board-column {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .board-row {
+      display: flex;
+      align-items: stretch;
+    }
+    .eval-bar-wrap {
+      width: 28px;
+      margin-right: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+    .eval-label-top, .eval-label-bottom {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--text-bright);
+      min-height: 1.2em;
+    }
+    .eval-bar {
+      flex: 1;
+      width: 100%;
+      background: var(--eval-black);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      min-height: 320px;
+    }
+    .eval-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--eval-white);
+      transition: height 0.35s ease;
+      height: 50%;
+    }
+    .board-container {
+      position: relative;
+      width: min(520px, calc(100vw - 80px));
+    }
+    #board { width: 100%; }
+    #arrow-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .board-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    button {
+      background: var(--surface2);
+      color: var(--text-bright);
+      border: 1px solid #3d3a36;
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.active-tool { outline: 2px solid var(--accent); }
+    .panel {
+      flex: 1;
+      min-width: 300px;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .card {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .card h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 0.75rem;
+    }
+    .engine-controls label {
+      display: block;
+      font-size: 0.8rem;
+      margin-bottom: 0.35rem;
+      color: var(--muted);
+    }
+    .engine-controls input[type=range] { width: 100%; }
+    .engine-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .engine-row select { flex: 1; padding: 0.35rem; background: var(--bg); color: var(--text); border: 1px solid #3d3a36; border-radius: 4px; }
+    .spinner {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--accent);
+    }
+    .spinner.show { display: flex; }
+    .spinner::before {
+      content: '';
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--accent-dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .engine-lines { list-style: none; padding: 0; margin: 0; }
+    .engine-line {
+      padding: 0.55rem 0.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: ui-monospace, "Consolas", monospace;
+      font-size: 0.85rem;
+      line-height: 1.45;
+      border: 1px solid transparent;
+    }
+    .engine-line:hover { background: var(--surface2); }
+    .engine-line.selected { background: var(--surface2); border-color: var(--accent); }
+    .engine-line .rank { color: var(--muted); margin-right: 0.35rem; }
+    .engine-line .eval-tag {
+      display: inline-block;
+      min-width: 3.2em;
+      font-weight: 700;
+      margin-right: 0.35rem;
+    }
+    .engine-line .eval-tag.win { color: var(--eval-white); }
+    .engine-line .eval-tag.lose { color: #c0c0c0; }
+    .engine-line .move-bold { font-weight: 700; color: var(--text-bright); }
+    .engine-line .pv-rest { color: var(--muted); }
+    textarea.fen-input {
+      width: 100%;
+      min-height: 72px;
+      background: var(--bg);
+      border: 1px solid #3d3a36;
+      border-radius: 6px;
+      color: var(--text);
+      padding: 0.5rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      resize: vertical;
+    }
+    .pgn-nav { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .move-table {
+      max-height: 160px;
+      overflow-y: auto;
+      font-family: ui-monospace, monospace;
+      font-size: 0.85rem;
+      line-height: 1.7;
+    }
+    .move-table span {
+      cursor: pointer;
+      padding: 0.1rem 0.25rem;
+      border-radius: 3px;
+    }
+    .move-table span:hover { background: var(--surface2); }
+    .move-table span.current { background: var(--accent); color: #fff; }
+    .play-panel { display: none; }
+    .play-panel.visible { display: block; }
+    .analysis-only { display: block; }
+    body.play-mode .analysis-only { display: none; }
+    body.play-mode .play-panel.visible { display: block; }
+    .captured-row { font-size: 1.25rem; margin-top: 0.5rem; }
+    .hidden { display: none !important; }
+    .promo-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+    .promo-modal.show { display: flex; }
+    .promo-box { background: var(--surface); padding: 1.5rem; border-radius: 8px; display: flex; gap: 1rem; }
+    .promo-box button { font-size: 1.75rem; width: 3rem; height: 3rem; padding: 0; }
+    .edit-palette {
+      display: none;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.5rem;
+    }
+    .edit-palette.show { display: flex; }
+    .edit-palette button { font-size: 1.25rem; padding: 0.25rem 0.4rem; }
+    .side-picker { display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center; font-size: 0.85rem; }
+  </style>
+</head>
+<body class="analysis-mode">
+  <header class="topbar">
+    <h1>Chess Analysis</h1>
+    <div class="mode-toggle">
+      <button type="button" id="btn-mode-analysis" class="active">Analysis</button>
+      <button type="button" id="btn-mode-play">Play</button>
+    </div>
+    <div class="status-bar" id="status-bar">White to move</div>
+  </header>
+
+  <main class="main">
+    <section class="board-column">
+      <div class="board-row">
+        <div class="eval-bar-wrap">
+          <div class="eval-label-top" id="eval-top"></div>
+          <div class="eval-bar" id="eval-bar">
+            <div class="eval-fill" id="eval-fill"></div>
+          </div>
+          <div class="eval-label-bottom" id="eval-bottom">+0.0</div>
+        </div>
+        <div class="board-container">
+          <div id="board"></div>
+          <svg id="arrow-layer" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+      <div class="board-tools analysis-only">
+        <button type="button" id="btn-flip">Flip board</button>
+        <button type="button" id="btn-edit">Edit position</button>
+        <button type="button" id="btn-arrows-3" class="active-tool">3 arrows</button>
+        <button type="button" id="btn-start">Start position</button>
+      </div>
+      <div class="edit-palette analysis-only" id="edit-palette">
+        <button data-piece="wK">♔</button><button data-piece="wQ">♕</button><button data-piece="wR">♖</button>
+        <button data-piece="wB">♗</button><button data-piece="wN">♘</button><button data-piece="wP">♙</button>
+        <button data-piece="bK">♚</button><button data-piece="bQ">♛</button><button data-piece="bR">♜</button>
+        <button data-piece="bB">♝</button><button data-piece="bN">♞</button><button data-piece="bP">♟</button>
+        <button data-piece="">✕</button>
+      </div>
+      <div class="side-picker analysis-only hidden" id="side-picker">
+        <span>Side to move:</span>
+        <button type="button" id="side-w" class="active-tool">White</button>
+        <button type="button" id="side-b">Black</button>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="card analysis-only" id="engine-card">
+        <h2>Engine</h2>
+        <div class="engine-controls">
+          <label>Depth: <span id="depth-val">12</span></label>
+          <input type="range" id="depth" min="1" max="20" value="12" />
+          <div class="engine-row">
+            <label style="margin:0">Lines</label>
+            <select id="num-lines">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+            </select>
+            <button type="button" class="primary" id="btn-analyze">Analyze</button>
+          </div>
+          <div class="spinner" id="spinner">Thinking…</div>
+        </div>
+        <ul class="engine-lines" id="engine-lines"></ul>
+      </div>
+
+      <div class="card analysis-only">
+        <h2>FEN / PGN</h2>
+        <textarea class="fen-input" id="fen-pgn-input" placeholder="Paste FEN or PGN…"></textarea>
+        <div style="margin-top:0.5rem;display:flex;gap:0.5rem">
+          <button type="button" class="primary" id="btn-load">Load</button>
+        </div>
+        <div class="pgn-nav analysis-only" style="margin-top:0.75rem">
+          <button type="button" id="btn-prev">◀ Prev</button>
+          <button type="button" id="btn-next">Next ▶</button>
+        </div>
+        <div class="move-table" id="move-table"></div>
+      </div>
+
+      <div class="card play-panel" id="play-panel">
+        <h2>Play</h2>
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem">
+          <button type="button" id="btn-human" class="active-tool">Human vs Human</button>
+          <button type="button" id="btn-ai">Human vs AI</button>
+          <button type="button" id="btn-reset">New game</button>
+        </div>
+        <div class="captured-row">
+          <div>White captures: <span id="cap-w"></span></div>
+          <div>Black captures: <span id="cap-b"></span></div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <div class="promo-modal" id="promo-modal">
+    <div class="promo-box">
+      <button data-piece="q">♕</button><button data-piece="r">♖</button>
+      <button data-piece="b">♗</button><button data-piece="n">♘</button>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script>
+    const PIECE_UNICODE = {
+      wK:'♔',wQ:'♕',wR:'♖',wB:'♗',wN:'♘',wP:'♙',
+      bK:'♚',bQ:'♛',bR:'♜',bB:'♝',bN:'♞',bP:'♟'
+    };
+    const ARROW_COLORS = ['#81b64c', '#f7c948', '#6bb6ff'];
+
+    let board = null;
+    let gameState = null;
+    let mode = 'analysis';
+    let vsAi = false;
+    let orientation = 'white';
+    let editMode = false;
+    let editPiece = 'wP';
+    let editSide = 'w';
+    let show3Arrows = true;
+    let analysisLines = [];
+    let selectedLine = 0;
+    let currentEvalCp = 0;
+    let pgnFens = [];
+    let pgnMoves = [];
+    let pgnIndex = 0;
+    let pendingPromo = null;
+    let customBoard = null;
+
+    function engineToPosition(state) {
+      const pos = {};
+      for (const [sq, piece] of Object.entries(state.board || {})) {
+        if (piece) pos[sq] = piece[0] === 'w' ? piece[1].toLowerCase() : piece[1].toUpperCase();
+      }
+      return pos;
+    }
+
+    function buildFenFromCustom() {
+      const ranks = [];
+      for (let r = 8; r >= 1; r--) {
+        let row = '', empty = 0;
+        for (const f of 'abcdefgh') {
+          const p = customBoard[f + r];
+          if (!p) { empty++; }
+          else {
+            if (empty) { row += empty; empty = 0; }
+            row += p[0] === 'w' ? p[1] : p[1].toLowerCase();
+          }
+        }
+        if (empty) row += empty;
+        ranks.push(row);
+      }
+      return `${ranks.join('/')} ${editSide} - - 0 1`;
+    }
+
+    function customFromState(state) {
+      customBoard = {};
+      for (const [sq, p] of Object.entries(state.board || {})) {
+        if (p) customBoard[sq] = p;
+      }
+      editSide = state.active_color || 'w';
+    }
+
+    function statusText(state) {
+      const n = state.fullmove_number || 1;
+      const turn = state.active_color === 'w' ? 'White' : 'Black';
+      const map = {
+        ongoing: `${turn} to move · Move ${n}`,
+        check: `${turn} is in check · Move ${n}`,
+        checkmate: (state.winner === 'w' ? 'White' : 'Black') + ' wins by checkmate',
+        stalemate: 'Draw — stalemate',
+        draw_50_move: 'Draw — 50-move rule',
+        draw_repetition: 'Draw — threefold repetition',
+        draw_insufficient_material: 'Draw — insufficient material'
+      };
+      return map[state.status] || `${turn} to move`;
+    }
+
+    function updateStatusBar(state) {
+      const el = document.getElementById('status-bar');
+      el.textContent = statusText(state);
+      el.className = 'status-bar' + ((state.in_check || state.status === 'check') ? ' check' : '');
+    }
+
+    function cpToBarPercent(cp) {
+      const capped = Math.max(-1000, Math.min(1000, cp));
+      return ((capped + 1000) / 2000) * 100;
+    }
+
+    function updateEvalBar(evalObj) {
+      const cp = evalObj?.cp ?? currentEvalCp ?? 0;
+      currentEvalCp = cp;
+      const display = evalObj?.display ?? (cp >= 0 ? '+' : '') + (cp / 100).toFixed(1);
+      const pct = cpToBarPercent(cp);
+      const fill = document.getElementById('eval-fill');
+      fill.style.height = pct + '%';
+      const bottom = document.getElementById('eval-bottom');
+      const top = document.getElementById('eval-top');
+      if (orientation === 'white') {
+        bottom.textContent = display;
+        top.textContent = '';
+      } else {
+        top.textContent = display;
+        bottom.textContent = '';
+        fill.style.height = (100 - pct) + '%';
+      }
+    }
+
+    function squareCenter(sq, boardWidth) {
+      const file = 'abcdefgh'.indexOf(sq[0]);
+      const rank = parseInt(sq[1], 10) - 1;
+      const sqSize = boardWidth / 8;
+      let x, y;
+      if (orientation === 'white') {
+        x = (file + 0.5) * sqSize;
+        y = (7 - rank + 0.5) * sqSize;
+      } else {
+        x = (7 - file + 0.5) * sqSize;
+        y = (rank + 0.5) * sqSize;
+      }
+      return { x, y };
+    }
+
+    function drawArrows() {
+      const svg = document.getElementById('arrow-layer');
+      const container = document.querySelector('.board-container');
+      const w = container.offsetWidth;
+      const h = container.offsetHeight;
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      svg.innerHTML = '';
+      const count = show3Arrows ? Math.min(3, analysisLines.length) : Math.min(1, analysisLines.length);
+      for (let i = 0; i < count; i++) {
+        const line = analysisLines[i];
+        if (!line?.pv_uci?.length) continue;
+        const uci = line.pv_uci[0];
+        if (uci.length < 4) continue;
+        const from = uci.slice(0, 2);
+        const to = uci.slice(2, 4);
+        const a = squareCenter(from, w);
+        const b = squareCenter(to, w);
+        drawArrow(svg, a, b, ARROW_COLORS[i], w);
+      }
+    }
+
+    function drawArrow(svg, from, to, color, boardW) {
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const headLen = boardW * 0.04;
+      const endX = to.x - ux * headLen * 1.5;
+      const endY = to.y - uy * headLen * 1.5;
+      const startX = from.x + ux * headLen;
+      const startY = from.y + uy * headLen;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', startX); line.setAttribute('y1', startY);
+      line.setAttribute('x2', endX); line.setAttribute('y2', endY);
+      line.setAttribute('stroke', color);
+      line.setAttribute('stroke-width', boardW * 0.018);
+      line.setAttribute('stroke-linecap', 'round');
+      svg.appendChild(line);
+      const angle = Math.atan2(dy, dx);
+      const ax1 = to.x - headLen * Math.cos(angle - 0.45);
+      const ay1 = to.y - headLen * Math.sin(angle - 0.45);
+      const ax2 = to.x - headLen * Math.cos(angle + 0.45);
+      const ay2 = to.y - headLen * Math.sin(angle + 0.45);
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      poly.setAttribute('points', `${to.x},${to.y} ${ax1},${ay1} ${ax2},${ay2}`);
+      poly.setAttribute('fill', color);
+      svg.appendChild(poly);
+    }
+
+    function renderEngineLines(lines) {
+      analysisLines = lines || [];
+      const ul = document.getElementById('engine-lines');
+      ul.innerHTML = '';
+      lines.forEach((line, i) => {
+        const li = document.createElement('li');
+        li.className = 'engine-line' + (i === selectedLine ? ' selected' : '');
+        const ev = line.eval?.display || '0.0';
+        const evClass = (line.eval_cp || 0) >= 0 ? 'win' : 'lose';
+        const first = line.move || '';
+        const rest = (line.pv || []).slice(1).join(' ');
+        li.innerHTML = `<span class="rank">${line.rank}.</span><span class="eval-tag ${evClass}">${ev}</span><span class="move-bold">${first}</span> <span class="pv-rest">${rest}</span>`;
+        li.onclick = () => { selectedLine = i; renderEngineLines(lines); drawArrows(); };
+        ul.appendChild(li);
+      });
+      drawArrows();
+    }
+
+    function renderMoveTable() {
+      const el = document.getElementById('move-table');
+      if (!pgnMoves.length) { el.innerHTML = '<span style="color:var(--muted)">No game loaded</span>'; return; }
+      let html = '';
+      for (let i = 0; i < pgnMoves.length; i += 2) {
+        const num = Math.floor(i / 2) + 1;
+        html += `<span class="num">${num}.</span> `;
+        html += `<span data-idx="${i + 1}" class="${pgnIndex === i + 1 ? 'current' : ''}">${pgnMoves[i].san}</span> `;
+        if (pgnMoves[i + 1]) {
+          html += `<span data-idx="${i + 2}" class="${pgnIndex === i + 2 ? 'current' : ''}">${pgnMoves[i + 1].san}</span> `;
+        }
+      }
+      el.innerHTML = html;
+      el.querySelectorAll('span[data-idx]').forEach(sp => {
+        sp.onclick = () => goToPly(parseInt(sp.dataset.idx, 10));
+      });
+    }
+
+    async function goToPly(idx) {
+      pgnIndex = idx;
+      if (!pgnFens[idx]) return;
+      const res = await fetch('/set_position', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fen: pgnFens[idx] })
+      });
+      const data = await res.json();
+      applyState(data);
+      renderMoveTable();
+    }
+
+    function applyState(state) {
+      gameState = state;
+      vsAi = state.vs_ai;
+      if (state.pgn_fens?.length) pgnFens = state.pgn_fens;
+      if (state.pgn_index != null) pgnIndex = state.pgn_index;
+      customFromState(state);
+      board.position(engineToPosition(state), false);
+      updateStatusBar(state);
+      if (state.fen) document.getElementById('fen-pgn-input').value = state.fen;
+    }
+
+    async function fetchState() {
+      const res = await fetch('/state');
+      return res.json();
+    }
+
+    async function loadPosition(body) {
+      const res = await fetch('/set_position', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Load failed'); return; }
+      if (data.moves?.length) {
+        pgnMoves = data.moves;
+        pgnFens = data.pgn_fens || [];
+        pgnIndex = data.pgn_index ?? pgnMoves.length;
+      } else {
+        pgnMoves = [];
+        pgnFens = [data.fen];
+        pgnIndex = 0;
+      }
+      applyState(data);
+      renderMoveTable();
+    }
+
+    async function runAnalyze() {
+      if (editMode) {
+        const fen = buildFenFromCustom();
+        await loadPosition({ fen });
+      }
+      const fen = gameState?.fen || document.getElementById('fen-pgn-input').value.trim();
+      const depth = parseInt(document.getElementById('depth').value, 10);
+      const num_lines = parseInt(document.getElementById('num-lines').value, 10);
+      document.getElementById('spinner').classList.add('show');
+      try {
+        const res = await fetch('/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fen, depth, num_lines })
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Analysis failed'); return; }
+        if (data.status === 'checkmate' || data.status === 'stalemate') {
+          updateStatusBar({ ...gameState, status: data.status });
+        }
+        updateEvalBar(data.eval);
+        renderEngineLines(data.lines || []);
+        selectedLine = 0;
+      } finally {
+        document.getElementById('spinner').classList.remove('show');
+      }
+    }
+
+    async function postMove(from, to, promotion) {
+      const body = { from, to };
+      if (promotion) body.promotion = promotion;
+      const res = await fetch('/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        board.position(engineToPosition(gameState), false);
+        return null;
+      }
+      return data;
+    }
+
+    function isPromotion(from, to) {
+      const piece = gameState.board[from];
+      if (!piece || piece[1] !== 'P') return false;
+      const tr = parseInt(to[1], 10);
+      return (piece[0] === 'w' && tr === 8) || (piece[0] === 'b' && tr === 1);
+    }
+
+    function onDrop(source, target) {
+      if (editMode) return 'snapback';
+      if (gameState.status !== 'ongoing' && gameState.status !== 'check') return 'snapback';
+      if (mode === 'play' && vsAi && gameState.active_color === 'b') return 'snapback';
+      if (isPromotion(source, target)) {
+        pendingPromo = { source, target };
+        document.getElementById('promo-modal').classList.add('show');
+        return 'snapback';
+      }
+      completeMove(source, target, null);
+    }
+
+    async function completeMove(source, target, promotion) {
+      const state = await postMove(source, target, promotion);
+      if (!state) return;
+      applyState(state);
+      pgnIndex = state.pgn_index ?? pgnMoves.length;
+      renderMoveTable();
+      if (mode === 'play' && vsAi && state.active_color === 'b' &&
+          !['checkmate','stalemate','draw_50_move','draw_repetition','draw_insufficient_material'].includes(state.status)) {
+        setTimeout(async () => {
+          const r = await fetch('/ai_move');
+          applyState(await r.json());
+        }, 400);
+      }
+    }
+
+    function onSquareClick(square) {
+      if (!editMode || mode !== 'analysis') return;
+      const cur = customBoard[square];
+      if (editPiece === '') {
+        delete customBoard[square];
+      } else if (cur === editPiece) {
+        delete customBoard[square];
+      } else {
+        customBoard[square] = editPiece;
+      }
+      const pos = {};
+      for (const [sq, p] of Object.entries(customBoard)) {
+        if (p) pos[sq] = p[0] === 'w' ? p[1].toLowerCase() : p[1].toUpperCase();
+      }
+      board.position(pos);
+    }
+
+    function setMode(m) {
+      mode = m;
+      document.body.classList.toggle('play-mode', m === 'play');
+      document.getElementById('btn-mode-analysis').classList.toggle('active', m === 'analysis');
+      document.getElementById('btn-mode-play').classList.toggle('active', m === 'play');
+      document.getElementById('play-panel').classList.toggle('visible', m === 'play');
+      board.draggable = !editMode;
+    }
+
+    board = Chessboard('board', {
+      draggable: true,
+      position: 'start',
+      orientation: 'white',
+      pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+      onDrop
+    });
+
+    $('#board').on('click', '.square-55d63', function () {
+      const square = $(this).data('square');
+      if (square) onSquareClick(square);
+    });
+
+    document.getElementById('depth').oninput = e => {
+      document.getElementById('depth-val').textContent = e.target.value;
+    };
+    document.getElementById('btn-analyze').onclick = runAnalyze;
+    document.getElementById('btn-flip').onclick = () => {
+      orientation = orientation === 'white' ? 'black' : 'white';
+      board.orientation(orientation);
+      updateEvalBar({ cp: currentEvalCp, display: document.getElementById('eval-bottom').textContent });
+      drawArrows();
+    };
+    document.getElementById('btn-edit').onclick = () => {
+      editMode = !editMode;
+      document.getElementById('btn-edit').classList.toggle('active-tool', editMode);
+      document.getElementById('edit-palette').classList.toggle('show', editMode);
+      document.getElementById('side-picker').classList.toggle('hidden', !editMode);
+      board.draggable = !editMode;
+    };
+    document.querySelectorAll('#edit-palette button').forEach(btn => {
+      btn.onclick = () => { editPiece = btn.dataset.piece; };
+    });
+    document.getElementById('side-w').onclick = () => { editSide = 'w'; document.getElementById('side-w').classList.add('active-tool'); document.getElementById('side-b').classList.remove('active-tool'); };
+    document.getElementById('side-b').onclick = () => { editSide = 'b'; document.getElementById('side-b').classList.add('active-tool'); document.getElementById('side-w').classList.remove('active-tool'); };
+    document.getElementById('btn-arrows-3').onclick = function() {
+      show3Arrows = !show3Arrows;
+      this.classList.toggle('active-tool', show3Arrows);
+      drawArrows();
+    };
+    document.getElementById('btn-start').onclick = async () => {
+      const res = await fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const data = await res.json();
+      pgnMoves = []; pgnFens = [data.fen]; pgnIndex = 0;
+      applyState(data);
+      renderMoveTable();
+    };
+    document.getElementById('btn-load').onclick = () => {
+      const text = document.getElementById('fen-pgn-input').value.trim();
+      if (!text) return;
+      if (text.includes('[') || /\d+\.\s*[a-hNBRQKO]/.test(text)) {
+        loadPosition({ pgn: text });
+      } else {
+        loadPosition({ fen: text });
+      }
+    };
+    document.getElementById('btn-prev').onclick = () => { if (pgnIndex > 0) goToPly(pgnIndex - 1); };
+    document.getElementById('btn-next').onclick = () => { if (pgnIndex < pgnFens.length - 1) goToPly(pgnIndex + 1); };
+    document.getElementById('btn-mode-analysis').onclick = () => setMode('analysis');
+    document.getElementById('btn-mode-play').onclick = () => setMode('play');
+    document.getElementById('btn-reset').onclick = async () => {
+      const res = await fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vs_ai: vsAi }) });
+      applyState(await res.json());
+    };
+    document.getElementById('btn-human').onclick = async () => {
+      vsAi = false;
+      await fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vs_ai: false }) });
+      applyState(await fetchState());
+    };
+    document.getElementById('btn-ai').onclick = async () => {
+      vsAi = true;
+      await fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vs_ai: true }) });
+      applyState(await fetchState());
+    };
+    document.querySelectorAll('.promo-box button').forEach(btn => {
+      btn.onclick = async () => {
+        document.getElementById('promo-modal').classList.remove('show');
+        if (pendingPromo) {
+          await completeMove(pendingPromo.source, pendingPromo.target, btn.dataset.piece);
+          pendingPromo = null;
+        }
+      };
+    });
+
+    window.addEventListener('resize', drawArrows);
+
+    fetchState().then(state => {
+      applyState(state);
+      pgnFens = state.pgn_fens || [state.fen];
+      updateEvalBar({ cp: 0, display: '+0.0' });
+    });
+  </script>
+</body>
+</html>
